@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#090d16" />
+      <stop offset="50%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#05070c" />
+    </linearGradient>
+    <linearGradient id="whiteGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#cbd5e1" />
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4ade80" />
+      <stop offset="100%" stop-color="#16a34a" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background with rounded corners for maskable safezone -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  
+  <!-- Outer rings in Crisp White and Emerald Green -->
+  <circle cx="256" cy="256" r="185" fill="none" stroke="url(#whiteGrad)" stroke-width="6" stroke-dasharray="16 12" opacity="0.3" />
+  <circle cx="256" cy="256" r="160" fill="#0d131f" stroke="#334155" stroke-width="3" />
+
+  <!-- Dual Color Rings: White for Class, Emerald Green for Routine -->
+  <!-- Left half / Arc for White (Classes) -->
+  <path d="M 256 116 A 140 140 0 0 0 256 396" fill="none" stroke="url(#whiteGrad)" stroke-width="16" stroke-linecap="round" />
+  <!-- Right half / Arc for Green (Routine) -->
+  <path d="M 256 116 A 140 140 0 0 1 256 396" fill="none" stroke="url(#greenGrad)" stroke-width="16" stroke-linecap="round" />
+
+  <!-- Center Clock & Bell Motif -->
+  <circle cx="256" cy="256" r="18" fill="#ffffff" />
+  <!-- Hour hand pointing to 8 o'clock (White) -->
+  <line x1="256" y1="256" x2="200" y2="280" stroke="#ffffff" stroke-width="12" stroke-linecap="round" />
+  <!-- Minute hand pointing to 12 (Emerald Green) -->
+  <line x1="256" y1="256" x2="256" y2="170" stroke="#4ade80" stroke-width="10" stroke-linecap="round" />
+
+  <!-- Sound / Notification Waves at top -->
+  <path d="M 230 80 Q 256 68 282 80" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.9" />
+  <path d="M 214 62 Q 256 46 298 62" fill="none" stroke="#4ade80" stroke-width="7" stroke-linecap="round" />
+
+  <!-- Center Accent: Ghanaian Gold Star -->
+  <polygon points="256,334 262,352 280,352 265,363 271,381 256,370 241,381 247,363 232,352 250,352" fill="#fbbf24" />
+</svg>

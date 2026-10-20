@@ -1,0 +1,6 @@
+{
+  "name": "Campus Flow",
+  "description": "100% offline personal timetable and voice reminder app for Ghanaian university students, featuring class schedules, personal routines, and local audio alerts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
