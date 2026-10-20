@@ -138,6 +138,16 @@ export function isStartingThisMinute(item: ScheduleItem, now = new Date()): bool
 }
 
 /**
+ * Checks if a reminder (either exact time or advance alert like 5m/10m before) is due this minute
+ */
+export function isReminderDueNow(startTimeStr: string, minutesBefore: number, now = new Date()): boolean {
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = timeStringToMinutes(startTimeStr);
+  const targetMinutes = (startMinutes - minutesBefore + 1440) % 1440;
+  return currentMinutes === targetMinutes;
+}
+
+/**
  * Sorts schedule items chronologically by startTime
  */
 export function sortScheduleItems(items: ScheduleItem[]): ScheduleItem[] {

@@ -2,7 +2,7 @@ import React from 'react';
 import { Volume2, Settings as SettingsIcon, Share2, Eye, EyeOff } from 'lucide-react';
 import { useSchedule } from '../context/ScheduleContext';
 import { PWAInstallButton } from './PWAInstallButton';
-import { getCurrentDayOfWeek } from '../utils/timeUtils';
+import { previewVoiceAlert } from '../utils/audioAlert';
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -11,7 +11,14 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenApkGuide, onOpenShare }) => {
-  const { currentTime, testTriggerAlarm, wakeLockActive, toggleWakeLock, settings } = useSchedule();
+  const {
+    currentTime,
+    testTriggerAlarm,
+    wakeLockActive,
+    toggleWakeLock,
+    settings,
+    setVoiceGender,
+  } = useSchedule();
 
   const formattedTime = currentTime.toLocaleTimeString([], {
     hour: '2-digit',
@@ -26,8 +33,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenApkGuide, 
     day: 'numeric',
   });
 
+  const handleToggleVoiceGender = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const nextGender = settings.voiceGender === 'female' ? 'male' : 'female';
+    setVoiceGender(nextGender);
+    previewVoiceAlert(nextGender, settings.studentName, settings.customVoicePhrase);
+  };
+
   return (
-    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-white/10 px-3.5 py-2.5 sm:px-6 sm:py-3 transition-colors">
+    <header className="sticky top-0 z-40 bg-slate-950/90 backdrop-blur-md border-b border-white/10 px-3 py-2.5 sm:px-6 sm:py-3 transition-colors">
       <div className="max-w-4xl mx-auto flex items-center justify-between gap-2">
         {/* Brand */}
         <div className="flex items-center gap-2.5 min-w-0">
@@ -61,9 +75,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenApkGuide, 
         </div>
 
         {/* Live Clock & Actions */}
-        <div className="flex items-center gap-2 sm:gap-2.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
           {/* Live Digital Clock Badge */}
-          <div className="hidden xs:flex flex-col items-end px-2.5 py-1 rounded-lg bg-slate-900 border border-white/10">
+          <div className="hidden md:flex flex-col items-end px-2.5 py-1 rounded-lg bg-slate-900 border border-white/10">
             <span className="text-xs sm:text-sm font-mono font-bold text-emerald-400 tracking-tight leading-none">
               {formattedTime}
             </span>
@@ -72,6 +86,23 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenApkGuide, 
             </span>
           </div>
 
+          {/* Quick Male / Female Voice Selector Pill */}
+          <button
+            onClick={handleToggleVoiceGender}
+            title={`Current Voice: ${settings.voiceGender === 'male' ? 'Male Voice' : 'Female Voice'} (Click to switch & preview)`}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-xs font-bold border border-white/15 transition active:scale-95"
+          >
+            <span className="text-sm leading-none">
+              {settings.voiceGender === 'male' ? '👨' : '👩'}
+            </span>
+            <span className="hidden sm:inline text-white">
+              {settings.voiceGender === 'male' ? 'Male Voice' : 'Female Voice'}
+            </span>
+            <span className="text-[10px] text-emerald-400 font-mono ml-0.5">
+              (Switch)
+            </span>
+          </button>
+
           {/* Quick Test Voice & Alarm */}
           <button
             onClick={() => testTriggerAlarm()}
@@ -79,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenSettings, onOpenApkGuide, 
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-all active:scale-95"
           >
             <Volume2 className="w-4 h-4 text-emerald-400 animate-pulse" />
-            <span className="hidden md:inline">Test Voice</span>
+            <span className="hidden sm:inline">Test Alert</span>
           </button>
 
           {/* Share App & QR Code button */}

@@ -28,6 +28,8 @@ import {
   sortScheduleItems,
   timeStringToMinutes,
 } from '../utils/timeUtils';
+import { BackgroundStatusBanner } from './BackgroundStatusBanner';
+import { UpcomingRemindersRadar } from './UpcomingRemindersRadar';
 
 interface TodayViewProps {
   onEditItem: (item: ScheduleItem) => void;
@@ -73,7 +75,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ onEditItem, onAddNew }) =>
       particleCount: 45,
       spread: 60,
       origin: { y: 0.8 },
-      colors: ['#4ade80', '#38bdf8', '#fbbf24'],
+      colors: ['#4ade80', '#ffffff', '#10b981'],
     });
   };
 
@@ -111,6 +113,12 @@ export const TodayView: React.FC<TodayViewProps> = ({ onEditItem, onAddNew }) =>
 
   return (
     <div className="space-y-4 pb-20">
+      {/* 1. Background Reminders Outside-App Status Banner */}
+      <BackgroundStatusBanner />
+
+      {/* 2. Upcoming Reminders Radar with live countdown and editable lead times */}
+      <UpcomingRemindersRadar onEditItem={onEditItem} />
+
       {/* Today Header Sub-bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-900/60 p-3.5 rounded-2xl border border-slate-800">
         <div>
@@ -154,7 +162,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ onEditItem, onAddNew }) =>
                 {currentActiveItem.title}
               </h3>
               <div className="flex flex-wrap items-center gap-2 mt-2">
-                <span className="text-sm font-semibold text-emerald-300 flex items-center gap-1">
+                <span className="text-sm font-semibold text-emerald-300 flex items-center gap-1 font-mono">
                   <Clock className="w-4 h-4" />
                   {formatTime12h(currentActiveItem.startTime)} – {formatTime12h(currentActiveItem.endTime)}
                 </span>
@@ -231,7 +239,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ onEditItem, onAddNew }) =>
           {upNextItem && (
             <div className="text-right hidden sm:block">
               <span className="text-[11px] text-slate-400">Up next:</span>
-              <p className="text-xs font-bold text-white truncate max-w-[150px]">
+              <p className="text-xs font-bold text-white truncate max-w-[180px]">
                 {upNextItem.title} ({formatTime12h(upNextItem.startTime)})
               </p>
             </div>
@@ -311,6 +319,10 @@ export const TodayView: React.FC<TodayViewProps> = ({ onEditItem, onAddNew }) =>
             const isActive = isTaskCurrentlyActive(item, currentTime);
             const isCompleted = item.completedDates?.includes(todayStr);
             const isClass = item.category === 'class';
+            const reminderLeadTimes =
+              item.advanceMinutes && item.advanceMinutes.length > 0
+                ? item.advanceMinutes
+                : settings.advanceReminderMinutes || [10, 5];
 
             return (
               <div
@@ -359,6 +371,14 @@ export const TodayView: React.FC<TodayViewProps> = ({ onEditItem, onAddNew }) =>
                       <span className="text-xs font-mono font-semibold text-slate-300">
                         {formatTime12h(item.startTime)} – {formatTime12h(item.endTime)}
                       </span>
+
+                      {/* Reminder Lead Pill */}
+                      {item.reminderEnabled && (
+                        <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-800/60 flex items-center gap-1">
+                          <Bell className="w-2.5 h-2.5 text-emerald-400" />
+                          {reminderLeadTimes.map((m) => `${m}m`).join(', ')} + start
+                        </span>
+                      )}
                     </div>
 
                     <h4
@@ -394,7 +414,7 @@ export const TodayView: React.FC<TodayViewProps> = ({ onEditItem, onAddNew }) =>
                       testTriggerAlarm(item);
                     }}
                     title="Speak reminder offline"
-                    className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-amber-300 transition"
+                    className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-emerald-300 transition"
                   >
                     <Volume2 className="w-4 h-4" />
                   </button>

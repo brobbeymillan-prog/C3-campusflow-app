@@ -19,7 +19,6 @@ import {
   getCurrentDayOfWeek,
   getTodayDateString,
   formatTime12h,
-  isStartingThisMinute,
 } from '../utils/timeUtils';
 import {
   playLoudAlarmSound,
@@ -28,6 +27,8 @@ import {
   speakVoiceAlert,
   triggerHapticVibration,
   showOfflineNotification,
+  flashWindowNotification,
+  stopWindowFlash,
 } from '../utils/audioAlert';
 
 interface ScheduleContextType {
@@ -37,6 +38,8 @@ interface ScheduleContextType {
   activeAlarm: ActiveAlarm | null;
   wakeLockActive: boolean;
   updateSettings: (newSettings: Partial<UserSettings>) => void;
+  setVoiceGender: (gender: 'male' | 'female') => void;
+  setGlobalAdvanceReminderMinutes: (minutes: number[]) => void;
   addItem: (item: Omit<ScheduleItem, 'id'>) => void;
   updateItem: (id: string, updated: Partial<ScheduleItem>) => void;
   deleteItem: (id: string) => void;
@@ -44,7 +47,8 @@ interface ScheduleContextType {
   toggleTaskCompletion: (id: string) => void;
   dismissAlarm: () => void;
   snoozeAlarm: (minutes?: number) => void;
-  testTriggerAlarm: (customItem?: ScheduleItem) => void;
+  testTriggerAlarm: (customItem?: ScheduleItem, minutesBefore?: number) => void;
+  testBackgroundAlert: (delaySeconds?: number, customItem?: ScheduleItem) => void;
   exportScheduleJson: () => void;
   importScheduleJson: (jsonString: string) => boolean;
   toggleWakeLock: () => Promise<void>;
@@ -89,7 +93,7 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
   const [wakeLockActive, setWakeLockActive] = useState<boolean>(false);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
 
-  // Track triggered minutes to prevent repeated alerts within the same minute
+  // Track triggered keys to prevent repeated alerts within the same minute
   const lastTriggeredKeysRef = useRef<Set<string>>(new Set());
 
   // Save items to localStorage whenever they change
@@ -110,12 +114,48 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [settings]);
 
-  // Clock tick (every 1 second)
+  // Clean up window title flashing when user focuses back on the app
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
+    const handleFocus = () => {
+      stopWindowFlash();
+    };
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('click', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('click', handleFocus);
+    };
+  }, []);
+
+  // Background Worker: Ticks every second even when app is minimized or locked!
+  useEffect(() => {
+    let worker: Worker | null = null;
+    let fallbackTimer: number | null = null;
+
+    try {
+      worker = new Worker('/alarmWorker.js');
+      worker.onmessage = (e) => {
+        if (e.data && e.data.type === 'TICK') {
+          setCurrentTime(new Date());
+        }
+      };
+      worker.postMessage({ type: 'START' });
+    } catch (err) {
+      console.warn('Dedicated WebWorker unavailable, falling back to interval:', err);
+      fallbackTimer = window.setInterval(() => {
+        setCurrentTime(new Date());
+      }, 1000);
+    }
+
+    return () => {
+      if (worker) {
+        worker.postMessage({ type: 'STOP' });
+        worker.terminate();
+      }
+      if (fallbackTimer !== null) {
+        clearInterval(fallbackTimer);
+      }
+    };
   }, []);
 
   // Screen WakeLock toggle
@@ -146,9 +186,20 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
     setSettings((prev) => ({ ...prev, ...newSettings }));
   }, []);
 
+  // Fast switch for voice gender
+  const setVoiceGender = useCallback((gender: 'male' | 'female') => {
+    setSettings((prev) => ({ ...prev, voiceGender: gender }));
+  }, []);
+
+  // Fast set for advance reminder minutes
+  const setGlobalAdvanceReminderMinutes = useCallback((minutes: number[]) => {
+    setSettings((prev) => ({ ...prev, advanceReminderMinutes: minutes }));
+  }, []);
+
   // Dismiss Alarm
   const dismissAlarm = useCallback(() => {
     stopAlarmLoop();
+    stopWindowFlash();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -159,35 +210,56 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
   const snoozeAlarm = useCallback(
     (minutes = 5) => {
       stopAlarmLoop();
+      stopWindowFlash();
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
       if (activeAlarm) {
         const itemToSnooze = activeAlarm.item;
         setActiveAlarm(null);
-        // Set timeout to re-trigger after X minutes
         setTimeout(() => {
-          triggerAlarmForItem(itemToSnooze, true);
+          triggerAlarmForItem(itemToSnooze, true, 0);
         }, minutes * 60 * 1000);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [activeAlarm]
   );
 
-  // Trigger Alarm Routine for a specific item
+  // Trigger Alarm Routine for a specific item (supports advance reminder minutes)
   const triggerAlarmForItem = useCallback(
-    (item: ScheduleItem, isSnoozed = false) => {
+    (item: ScheduleItem, isSnoozed = false, minutesBefore = 0) => {
       const timeFormatted = formatTime12h(item.startTime);
-      const msg = `Hey ${settings.studentName}, it's ${timeFormatted} — you have ${item.title} now${
-        item.venue ? ` at ${item.venue}` : ''
-      }!`;
+      const isAdvance = minutesBefore > 0;
+
+      let msg = '';
+      let notifTitle = '';
+
+      if (isAdvance) {
+        msg = `Hey ${settings.studentName}, in ${minutesBefore} minutes you have ${item.title}${
+          item.venue ? ` at ${item.venue}` : ''
+        } (${timeFormatted})!`;
+        notifTitle = `Campus Flow (${minutesBefore}m Warning): ${item.title}`;
+      } else {
+        msg = `Hey ${settings.studentName}, it's ${timeFormatted} — you have ${item.title} now${
+          item.venue ? ` at ${item.venue}` : ''
+        }!`;
+        notifTitle = `Campus Flow: ${item.title} Starting Now`;
+      }
 
       setActiveAlarm({
         item,
         triggeredAt: new Date(),
         message: msg,
         isSnoozed,
+        minutesBefore,
+        isAdvanceReminder: isAdvance,
       });
+
+      // If outside the app / tab is in background, flash the document title
+      if (typeof document !== 'undefined' && document.hidden) {
+        flashWindowNotification(item.title, item.venue);
+      }
 
       // 1. Loud chime alarm loop
       if (settings.loudChimeEnabled) {
@@ -199,37 +271,62 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
         triggerHapticVibration();
       }
 
-      // 3. Spoken voice alert: "Charlie Milan, you have to do this"
+      // 3. Spoken voice alert (with Male/Female selection)
       if (settings.voiceAlertEnabled) {
-        speakVoiceAlert(
-          item.title,
-          item.venue,
-          timeFormatted,
-          settings.studentName,
-          settings.customVoicePhrase,
-          settings.speechRate,
-          settings.speechPitch
-        );
+        speakVoiceAlert({
+          taskTitle: item.title,
+          venue: item.venue,
+          startTime: timeFormatted,
+          studentName: settings.studentName,
+          customPhrase: settings.customVoicePhrase,
+          rate: settings.speechRate,
+          pitch: settings.speechPitch,
+          gender: settings.voiceGender,
+          voiceURI: settings.voiceURI,
+          minutesBefore,
+        });
       }
 
-      // 4. Offline system notification
+      // 4. Offline system notification (Service Worker & Desktop Notification)
       if (settings.notificationsEnabled) {
-        showOfflineNotification(
-          `Campus Flow: ${item.title}`,
-          msg
-        );
+        showOfflineNotification(notifTitle, msg, {
+          taskTitle: item.title,
+          venue: item.venue,
+          startTime: timeFormatted,
+          minutesBefore,
+        });
       }
     },
     [settings]
   );
 
+  // Listen for Service Worker notification clicks (brings app up and acknowledges)
+  useEffect(() => {
+    const handleSwMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'NOTIFICATION_CLICKED') {
+        const { taskTitle, minutesBefore } = event.data.data || {};
+        const matchingItem = items.find((i) => i.title === taskTitle);
+        if (matchingItem) {
+          triggerAlarmForItem(matchingItem, false, minutesBefore || 0);
+        }
+      }
+    };
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      };
+    }
+  }, [items, triggerAlarmForItem]);
+
   // Test trigger function for user verification
   const testTriggerAlarm = useCallback(
-    (customItem?: ScheduleItem) => {
+    (customItem?: ScheduleItem, minutesBefore = 0) => {
       const sampleItem: ScheduleItem = customItem || {
         id: 'test-sample',
-        title: 'Intro Mining',
-        venue: 'CCG3',
+        title: 'Paleontology',
+        venue: 'CCJ3',
         category: 'class',
         day: 'Monday',
         startTime: `${String(currentTime.getHours()).padStart(2, '0')}:${String(
@@ -239,35 +336,79 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
         reminderEnabled: true,
         notes: 'Test alarm demonstration',
       };
-      triggerAlarmForItem(sampleItem);
+      triggerAlarmForItem(sampleItem, false, minutesBefore);
     },
     [currentTime, triggerAlarmForItem]
   );
 
-  // Check schedules every 5 seconds for trigger matches
+  // Schedule a delayed test alert so user can minimize window and verify outside-app notification!
+  const testBackgroundAlert = useCallback(
+    (delaySeconds = 5, customItem?: ScheduleItem) => {
+      const sampleItem: ScheduleItem = customItem || {
+        id: 'test-bg-sample',
+        title: 'Paleontology',
+        venue: 'CCJ3',
+        category: 'class',
+        day: 'Monday',
+        startTime: '06:00',
+        endTime: '07:00',
+        reminderEnabled: true,
+        notes: 'Background outside-app test',
+      };
+
+      // Request permission first if needed
+      if (typeof Notification !== 'undefined' && Notification.permission !== 'granted') {
+        Notification.requestPermission();
+      }
+
+      setTimeout(() => {
+        triggerAlarmForItem(sampleItem, false, 0);
+      }, delaySeconds * 1000);
+    },
+    [triggerAlarmForItem]
+  );
+
+  // Check schedules every second for trigger matches (both exact start and advance reminders)
   useEffect(() => {
     const todayDayName = getCurrentDayOfWeek(currentTime);
-    const minuteKey = `${todayDayName}_${currentTime.getHours()}:${currentTime.getMinutes()}`;
+    const currentMinsTotal = currentTime.getHours() * 60 + currentTime.getMinutes();
+    const minuteKey = `${todayDayName}_${currentMinsTotal}`;
 
-    // Clean up cache when day changes
-    if (lastTriggeredKeysRef.current.size > 100) {
+    // Clean up cache periodically
+    if (lastTriggeredKeysRef.current.size > 200) {
       lastTriggeredKeysRef.current.clear();
     }
 
     const eligibleItems = items.filter((item) => {
       if (!item.reminderEnabled) return false;
-      const isToday = item.day === 'Daily' || item.day === todayDayName;
-      return isToday && isStartingThisMinute(item, currentTime);
+      return item.day === 'Daily' || item.day === todayDayName;
     });
 
     for (const item of eligibleItems) {
-      const itemKey = `${minuteKey}_${item.id}`;
-      if (!lastTriggeredKeysRef.current.has(itemKey)) {
-        lastTriggeredKeysRef.current.add(itemKey);
-        triggerAlarmForItem(item);
+      // Determine reminder intervals: custom on item or global settings, always including 0 (start time)
+      const baseIntervals =
+        item.advanceMinutes && item.advanceMinutes.length > 0
+          ? item.advanceMinutes
+          : settings.advanceReminderMinutes || [10, 5];
+      const allIntervals = Array.from(new Set([...baseIntervals, 0]));
+
+      for (const interval of allIntervals) {
+        const itemKey = `${minuteKey}_${item.id}_before_${interval}`;
+        if (!lastTriggeredKeysRef.current.has(itemKey)) {
+          // Check if due this exact minute
+          const startMins =
+            (parseInt(item.startTime.split(':')[0], 10) || 0) * 60 +
+            (parseInt(item.startTime.split(':')[1], 10) || 0);
+          const targetMins = (startMins - interval + 1440) % 1440;
+
+          if (currentMinsTotal === targetMins) {
+            lastTriggeredKeysRef.current.add(itemKey);
+            triggerAlarmForItem(item, false, interval);
+          }
+        }
       }
     }
-  }, [currentTime, items, triggerAlarmForItem]);
+  }, [currentTime, items, settings.advanceReminderMinutes, triggerAlarmForItem]);
 
   // Add Item
   const addItem = useCallback((itemData: Omit<ScheduleItem, 'id'>) => {
@@ -364,6 +505,8 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
         activeAlarm,
         wakeLockActive,
         updateSettings,
+        setVoiceGender,
+        setGlobalAdvanceReminderMinutes,
         addItem,
         updateItem,
         deleteItem,
@@ -372,6 +515,7 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
         dismissAlarm,
         snoozeAlarm,
         testTriggerAlarm,
+        testBackgroundAlert,
         exportScheduleJson,
         importScheduleJson,
         toggleWakeLock,

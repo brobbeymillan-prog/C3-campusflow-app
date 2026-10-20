@@ -11,17 +11,21 @@ export const ActiveAlarmModal: React.FC = () => {
 
   const item = activeAlarm.item;
   const timeStr = formatTime12h(item.startTime);
+  const minutesBefore = activeAlarm.minutesBefore || 0;
 
   const handleReplayVoice = () => {
-    speakVoiceAlert(
-      item.title,
-      item.venue,
-      timeStr,
-      settings.studentName,
-      settings.customVoicePhrase,
-      settings.speechRate,
-      settings.speechPitch
-    );
+    speakVoiceAlert({
+      taskTitle: item.title,
+      venue: item.venue,
+      startTime: timeStr,
+      studentName: settings.studentName,
+      customPhrase: settings.customVoicePhrase,
+      rate: settings.speechRate,
+      pitch: settings.speechPitch,
+      gender: settings.voiceGender,
+      voiceURI: settings.voiceURI,
+      minutesBefore,
+    });
   };
 
   return (
@@ -31,9 +35,9 @@ export const ActiveAlarmModal: React.FC = () => {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none animate-pulse" />
 
         {/* Pulsing Bell Icon */}
-        <div className="relative inline-flex items-center justify-center mb-4">
-          <div className="w-20 h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/30">
-            <Bell className="w-10 h-10 text-emerald-400 animate-bounce" />
+        <div className="relative inline-flex items-center justify-center mb-3">
+          <div className="w-18 h-18 sm:w-20 sm:h-20 rounded-full bg-emerald-500/20 border-2 border-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/30">
+            <Bell className="w-9 h-9 sm:w-10 sm:h-10 text-emerald-400 animate-bounce" />
           </div>
           <span className="absolute -top-1 -right-1 flex h-4 w-4">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -41,8 +45,23 @@ export const ActiveAlarmModal: React.FC = () => {
           </span>
         </div>
 
+        {/* Advance or Starting Now Badge */}
+        <div className="mb-2">
+          {activeAlarm.isAdvanceReminder ? (
+            <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
+              <Clock className="w-3.5 h-3.5 text-amber-400" />
+              In {minutesBefore} Minutes
+            </span>
+          ) : (
+            <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-black uppercase tracking-wider inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              Starting Right Now
+            </span>
+          )}
+        </div>
+
         {/* Spoken phrase quote */}
-        <div className="px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-black tracking-wide uppercase inline-block mb-2">
+        <div className="px-3 py-1 rounded-full bg-white/10 border border-white/20 text-white text-xs font-bold tracking-wide uppercase inline-block mb-2">
           🗣️ "{settings.customVoicePhrase}"
         </div>
 

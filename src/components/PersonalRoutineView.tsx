@@ -150,6 +150,19 @@ export const PersonalRoutineView: React.FC<PersonalRoutineViewProps> = ({
                           Daily
                         </span>
 
+                        {block.reminderEnabled && (
+                          <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-800/60 flex items-center gap-1">
+                            <Bell className="w-2.5 h-2.5 text-emerald-400" />
+                            {(block.advanceMinutes && block.advanceMinutes.length > 0
+                              ? block.advanceMinutes
+                              : [10, 5]
+                            )
+                              .map((m) => `${m}m`)
+                              .join(', ')}{' '}
+                            + start
+                          </span>
+                        )}
+
                         {isActive && (
                           <span className="px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-slate-950">
                             Active Now

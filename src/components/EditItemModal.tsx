@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clock, MapPin, Tag, Calendar, Bell, Trash2, Check, BookOpen, Sparkles } from 'lucide-react';
+import {
+  X,
+  Clock,
+  MapPin,
+  Tag,
+  Calendar,
+  Bell,
+  Trash2,
+  Check,
+  BookOpen,
+  Sparkles,
+  Sliders,
+  Plus,
+} from 'lucide-react';
 import { ScheduleItem, DayOfWeek, Category } from '../types/schedule';
 import { DAYS_OF_WEEK } from '../utils/timeUtils';
 import { useSchedule } from '../context/ScheduleContext';
@@ -13,6 +26,7 @@ interface EditItemModalProps {
 }
 
 const VENUE_PRESETS = [
+  'CCJ3',
   'CCG3',
   'CCF2',
   'LH1',
@@ -25,6 +39,20 @@ const VENUE_PRESETS = [
   'Cafeteria',
 ];
 
+const COURSE_PRESETS = [
+  'Paleontology',
+  'Crystallography and Mineralogy',
+  'Intro Mining',
+  'Optical Mineralogy',
+  'PG & RS',
+  'S.Geology',
+  'Sed Petrology',
+  'Maths Method',
+  'G.Psychology',
+];
+
+const PRESET_LEAD_TIMES = [5, 10, 15, 30, 60];
+
 export const EditItemModal: React.FC<EditItemModalProps> = ({
   item,
   isOpen,
@@ -32,7 +60,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   defaultDay = 'Monday',
   defaultCategory = 'class',
 }) => {
-  const { addItem, updateItem, deleteItem } = useSchedule();
+  const { addItem, updateItem, deleteItem, settings } = useSchedule();
 
   const [title, setTitle] = useState('');
   const [venue, setVenue] = useState('');
@@ -41,6 +69,8 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('09:00');
   const [reminderEnabled, setReminderEnabled] = useState(true);
+  const [advanceMinutes, setAdvanceMinutes] = useState<number[]>([10, 5]);
+  const [customMinInput, setCustomMinInput] = useState('');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
@@ -52,21 +82,44 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
       setStartTime(item.startTime);
       setEndTime(item.endTime);
       setReminderEnabled(item.reminderEnabled);
+      setAdvanceMinutes(
+        item.advanceMinutes && item.advanceMinutes.length > 0
+          ? item.advanceMinutes
+          : settings.advanceReminderMinutes || [10, 5]
+      );
       setNotes(item.notes || '');
     } else {
       // Defaults for new item
       setTitle('');
-      setVenue(defaultCategory === 'class' ? 'CCG3' : 'Hostel');
+      setVenue(defaultCategory === 'class' ? 'CCJ3' : 'Hostel');
       setCategory(defaultCategory);
       setDay(defaultCategory === 'class' ? defaultDay : 'Daily');
       setStartTime('08:00');
       setEndTime('09:00');
       setReminderEnabled(true);
+      setAdvanceMinutes(settings.advanceReminderMinutes || [10, 5]);
       setNotes('');
     }
-  }, [item, isOpen, defaultDay, defaultCategory]);
+  }, [item, isOpen, defaultDay, defaultCategory, settings.advanceReminderMinutes]);
 
   if (!isOpen) return null;
+
+  const toggleLeadTime = (mins: number) => {
+    if (advanceMinutes.includes(mins)) {
+      setAdvanceMinutes(advanceMinutes.filter((m) => m !== mins));
+    } else {
+      setAdvanceMinutes([...advanceMinutes, mins].sort((a, b) => b - a));
+    }
+  };
+
+  const handleAddCustomMinutes = (e: React.FormEvent) => {
+    e.preventDefault();
+    const val = parseInt(customMinInput.trim(), 10);
+    if (!isNaN(val) && val > 0 && val <= 180 && !advanceMinutes.includes(val)) {
+      setAdvanceMinutes([...advanceMinutes, val].sort((a, b) => b - a));
+      setCustomMinInput('');
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +134,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
         startTime,
         endTime,
         reminderEnabled,
+        advanceMinutes,
         notes: notes.trim(),
       });
     } else {
@@ -92,6 +146,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
         startTime,
         endTime,
         reminderEnabled,
+        advanceMinutes,
         notes: notes.trim(),
       });
     }
@@ -107,8 +162,8 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
         {/* Modal Header */}
         <div className="flex items-center justify-between p-4 sm:p-5 border-b border-slate-800 bg-slate-900/90">
           <div className="flex items-center gap-2">
@@ -126,7 +181,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                 {item ? 'Edit Timetable Entry' : 'Add New Schedule Entry'}
               </h3>
               <p className="text-xs text-slate-400">
-                Adjust lecture or routine times for offline alerts
+                Adjust lecture or routine times & reminder warnings
               </p>
             </div>
           </div>
@@ -172,7 +227,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
             </div>
           </div>
 
-          {/* Title */}
+          {/* Title with Quick Course Presets */}
           <div>
             <label className="block text-xs font-semibold text-slate-300 mb-1.5">
               Title / Course Name *
@@ -182,9 +237,24 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               required
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Intro Mining, PG & RS, Reading + Revision"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-500 font-medium"
+              placeholder="e.g. Paleontology, Crystallography and Mineralogy, Intro Mining"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-slate-500 font-bold"
             />
+            {/* Quick Course Suggestions */}
+            {category === 'class' && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {COURSE_PRESETS.map((c) => (
+                  <button
+                    type="button"
+                    key={c}
+                    onClick={() => setTitle(c)}
+                    className="text-[10px] px-2 py-0.5 rounded-lg bg-slate-800/80 text-slate-300 border border-slate-700/60 hover:text-white hover:bg-slate-700 transition"
+                  >
+                    + {c}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Venue / Location & Quick Presets */}
@@ -196,8 +266,8 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               type="text"
               value={venue}
               onChange={(e) => setVenue(e.target.value)}
-              placeholder="e.g. CCG3, VLE, LH1, GEO LAB only, Hostel"
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-500 font-medium"
+              placeholder="e.g. CCJ3, CCG3, VLE, LH1, GEO LAB only, Hostel"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-slate-500 font-medium"
             />
             {/* Presets */}
             <div className="flex flex-wrap gap-1.5 mt-2">
@@ -226,7 +296,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
             <select
               value={day}
               onChange={(e) => setDay(e.target.value as DayOfWeek | 'Daily')}
-              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
             >
               <option value="Daily">Daily (Every Day Routine)</option>
               {DAYS_OF_WEEK.map((d) => (
@@ -249,7 +319,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                   required
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
               </div>
             </div>
@@ -264,31 +334,88 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
                   required
                   value={endTime}
                   onChange={(e) => setEndTime(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
                 />
               </div>
             </div>
           </div>
 
-          {/* Reminder Toggle */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
-            <div className="flex items-center gap-2.5">
-              <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
-                <Bell className="w-4 h-4" />
+          {/* Reminder Toggle & Lead Times Configuration */}
+          <div className="p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/60 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white">Voice & Alarm Reminders</p>
+                  <p className="text-[11px] text-slate-400">
+                    Speaks voice & plays chime offline
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs font-bold text-white">Voice & Alarm Reminder</p>
-                <p className="text-[11px] text-slate-400">
-                  Trigger loud notification and Charlie Milan voice
-                </p>
-              </div>
+              <input
+                type="checkbox"
+                checked={reminderEnabled}
+                onChange={(e) => setReminderEnabled(e.target.checked)}
+                className="w-4 h-4 text-emerald-600 rounded bg-slate-700 border-slate-600 focus:ring-emerald-500"
+              />
             </div>
-            <input
-              type="checkbox"
-              checked={reminderEnabled}
-              onChange={(e) => setReminderEnabled(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded bg-slate-700 border-slate-600 focus:ring-blue-500"
-            />
+
+            {reminderEnabled && (
+              <div className="pt-2 border-t border-slate-700/60 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">
+                    When to remind you (Lead Times):
+                  </span>
+                  <span className="text-[10px] text-emerald-400">
+                    Always alerts at 0m (start)
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESET_LEAD_TIMES.map((m) => {
+                    const active = advanceMinutes.includes(m);
+                    return (
+                      <button
+                        type="button"
+                        key={m}
+                        onClick={() => toggleLeadTime(m)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition ${
+                          active
+                            ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-black'
+                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        {active ? `✓ ${m}m before` : `${m}m before`}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Custom minute entry */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-[11px] text-slate-400">Custom warning:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="180"
+                    placeholder="e.g. 20"
+                    value={customMinInput}
+                    onChange={(e) => setCustomMinInput(e.target.value)}
+                    className="w-16 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white font-mono text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <span className="text-[11px] text-slate-400">mins</span>
+                  <button
+                    type="button"
+                    onClick={handleAddCustomMinutes}
+                    className="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold transition"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Notes */}
@@ -301,7 +428,7 @@ export const EditItemModal: React.FC<EditItemModalProps> = ({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="e.g. Bring thin section kit, VLE password, revision chapters 1-4"
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-slate-500"
+              className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 placeholder-slate-500"
             />
           </div>
 

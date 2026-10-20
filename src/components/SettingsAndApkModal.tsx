@@ -14,9 +14,18 @@ import {
   Layers,
   Terminal,
   ExternalLink,
+  Monitor,
+  CheckCircle2,
+  Sliders,
 } from 'lucide-react';
 import { useSchedule } from '../context/ScheduleContext';
-import { playLoudAlarmSound, triggerHapticVibration, speakVoiceAlert } from '../utils/audioAlert';
+import {
+  playLoudAlarmSound,
+  triggerHapticVibration,
+  speakVoiceAlert,
+  previewVoiceAlert,
+  getCategorizedVoices,
+} from '../utils/audioAlert';
 
 interface SettingsAndApkModalProps {
   isOpen: boolean;
@@ -24,6 +33,8 @@ interface SettingsAndApkModalProps {
   initialTab?: 'settings' | 'apk';
   onOpenShare?: () => void;
 }
+
+const PRESET_LEAD_OPTIONS = [5, 10, 15, 30, 60];
 
 export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
   isOpen,
@@ -34,19 +45,24 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
   const {
     settings,
     updateSettings,
+    setVoiceGender,
     resetToDefaults,
     exportScheduleJson,
     importScheduleJson,
     testTriggerAlarm,
+    testBackgroundAlert,
     wakeLockActive,
     toggleWakeLock,
   } = useSchedule();
 
   const [activeTab, setActiveTab] = useState<'settings' | 'apk'>(initialTab);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [testCountdown, setTestCountdown] = useState<number | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<string>(
     typeof Notification !== 'undefined' ? Notification.permission : 'default'
   );
+
+  const categorizedVoices = getCategorizedVoices();
 
   if (!isOpen) return null;
 
@@ -56,8 +72,45 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
       setNotificationPermission(res);
       if (res === 'granted') {
         updateSettings({ notificationsEnabled: true });
+        // Immediate test
+        speakVoiceAlert({
+          taskTitle: 'Paleontology',
+          venue: 'CCJ3',
+          startTime: '6:00 AM',
+          studentName: settings.studentName,
+          customPhrase: settings.customVoicePhrase,
+          gender: settings.voiceGender,
+        });
       }
     }
+  };
+
+  const handleStartMinimizationTest = () => {
+    setTestCountdown(5);
+    testBackgroundAlert(5);
+
+    const interval = window.setInterval(() => {
+      setTestCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const toggleLeadTime = (mins: number) => {
+    const current = settings.advanceReminderMinutes || [10, 5];
+    const exists = current.includes(mins);
+    let updated: number[];
+    if (exists) {
+      updated = current.filter((m) => m !== mins);
+      if (updated.length === 0) updated = [5];
+    } else {
+      updated = [...current, mins].sort((a, b) => b - a);
+    }
+    updateSettings({ advanceReminderMinutes: updated });
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -91,7 +144,7 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
             <div>
               <h3 className="text-lg font-bold text-white">Campus Flow Hub</h3>
               <p className="text-xs text-slate-400">
-                Settings, Voice Customization & Android APK Readiness
+                Voice Selection, Background Alerts & Reminders
               </p>
             </div>
           </div>
@@ -115,7 +168,7 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
             }`}
           >
             <Volume2 className="w-4 h-4 text-emerald-400" />
-            Voice & Alarm Settings
+            Voice, Alerts & Reminders
           </button>
           <button
             onClick={() => setActiveTab('apk')}
@@ -133,7 +186,160 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
         {/* Tab Body */}
         <div className="p-4 sm:p-5 space-y-5 overflow-y-auto flex-1">
           {activeTab === 'settings' ? (
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Voice Selection: Male and Female Voice Choice */}
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-white flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    Spoken Voice: Choose Female or Male
+                  </label>
+                  <span className="text-[11px] text-slate-400">
+                    Works 100% offline
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Female Voice Card */}
+                  <div
+                    className={`p-3.5 rounded-2xl border transition relative flex flex-col justify-between gap-3 ${
+                      settings.voiceGender === 'female'
+                        ? 'bg-slate-800 border-white shadow-md shadow-white/10'
+                        : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl">👩</span>
+                        {settings.voiceGender === 'female' && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 uppercase">
+                            Active Voice
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-sm font-black text-white mt-2">
+                        Female Voice
+                      </h4>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Clear, friendly & melodic pronunciation with higher pitch.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-700/50">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          previewVoiceAlert(
+                            'female',
+                            settings.studentName,
+                            settings.customVoicePhrase
+                          )
+                        }
+                        className="flex-1 py-1.5 px-2 rounded-xl bg-slate-700/80 hover:bg-slate-600 text-white text-xs font-bold transition flex items-center justify-center gap-1"
+                      >
+                        <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                        Preview
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVoiceGender('female');
+                          previewVoiceAlert(
+                            'female',
+                            settings.studentName,
+                            settings.customVoicePhrase
+                          );
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1 ${
+                          settings.voiceGender === 'female'
+                            ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                            : 'bg-white hover:bg-slate-200 text-slate-950'
+                        }`}
+                      >
+                        {settings.voiceGender === 'female' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            Selected
+                          </>
+                        ) : (
+                          "I Like This"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Male Voice Card */}
+                  <div
+                    className={`p-3.5 rounded-2xl border transition relative flex flex-col justify-between gap-3 ${
+                      settings.voiceGender === 'male'
+                        ? 'bg-slate-800 border-white shadow-md shadow-white/10'
+                        : 'bg-slate-950/70 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-2xl">👨</span>
+                        {settings.voiceGender === 'male' && (
+                          <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-500 text-slate-950 uppercase">
+                            Active Voice
+                          </span>
+                        )}
+                      </div>
+                      <h4 className="text-sm font-black text-white mt-2">
+                        Male Voice
+                      </h4>
+                      <p className="text-[11px] text-slate-300 mt-0.5">
+                        Deep, authoritative & resonant timbre with lower pitch.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-2 border-t border-slate-700/50">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          previewVoiceAlert(
+                            'male',
+                            settings.studentName,
+                            settings.customVoicePhrase
+                          )
+                        }
+                        className="flex-1 py-1.5 px-2 rounded-xl bg-slate-700/80 hover:bg-slate-600 text-white text-xs font-bold transition flex items-center justify-center gap-1"
+                      >
+                        <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                        Preview
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVoiceGender('male');
+                          previewVoiceAlert(
+                            'male',
+                            settings.studentName,
+                            settings.customVoicePhrase
+                          );
+                        }}
+                        className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-black transition flex items-center justify-center gap-1 ${
+                          settings.voiceGender === 'male'
+                            ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                            : 'bg-white hover:bg-slate-200 text-slate-950'
+                        }`}
+                      >
+                        {settings.voiceGender === 'male' ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            Selected
+                          </>
+                        ) : (
+                          "I Like This"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Student Name */}
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1.5">
@@ -144,7 +350,7 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                   value={settings.studentName}
                   onChange={(e) => updateSettings({ studentName: e.target.value })}
                   placeholder="e.g. Charlie Milan"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-bold"
                 />
               </div>
 
@@ -158,15 +364,99 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                   value={settings.customVoicePhrase}
                   onChange={(e) => updateSettings({ customVoicePhrase: e.target.value })}
                   placeholder="Charlie Milan, you have to do this"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Spoken before telling you the time, course, and lecture hall.
+                  Spoken before: "Hey Charlie Milan, it's 6:00 AM — you have Paleontology at CCJ3 now!"
                 </p>
               </div>
 
+              {/* Reminder Lead Times (Advance Warnings) */}
+              <div className="p-3.5 rounded-2xl bg-slate-800/60 border border-slate-700/60 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 text-emerald-400" />
+                    <span className="text-xs font-bold text-white">
+                      Advance Reminder Lead Times
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-slate-400">
+                    Always alerts at 0m (start)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-300">
+                  Choose when you want to receive pre-class warnings:
+                </p>
+
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {PRESET_LEAD_OPTIONS.map((m) => {
+                    const isSelected = settings.advanceReminderMinutes?.includes(m);
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => toggleLeadTime(m)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
+                          isSelected
+                            ? 'bg-emerald-500 text-slate-950 border-emerald-400 font-black shadow-sm'
+                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                        <span>{m} min before</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Outside-App & Background Notification Guide & Test */}
+              <div className="p-4 rounded-2xl bg-slate-950 border border-emerald-500/30 space-y-3">
+                <div className="flex items-center gap-2">
+                  <Monitor className="w-4 h-4 text-emerald-400" />
+                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
+                    How Background Reminders Work Outside The App
+                  </h4>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  On computers & laptops, keep Campus Flow minimized in your taskbar. Our isolated background Web Worker continuously monitors your schedule. When class time arrives, it triggers:
+                </p>
+
+                <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside">
+                  <li>Desktop system banner notification with course & lecture hall</li>
+                  <li>Flashing window title in your taskbar</li>
+                  <li>Loud university chime alarm & voice prompt</li>
+                </ul>
+
+                {/* Test Outside App Button */}
+                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleStartMinimizationTest}
+                    disabled={testCountdown !== null}
+                    className="py-2.5 px-4 rounded-xl bg-white hover:bg-slate-200 text-slate-950 text-xs font-black shadow-md transition active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Monitor className="w-4 h-4 text-emerald-600" />
+                    {testCountdown !== null
+                      ? `Minimize window now! Testing in ${testCountdown}s`
+                      : 'Test Outside-App Alert (Minimizes in 5s)'}
+                  </button>
+
+                  {notificationPermission !== 'granted' && (
+                    <button
+                      type="button"
+                      onClick={handleRequestNotification}
+                      className="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition"
+                    >
+                      Allow Desktop Notifications
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Alert Options Toggles */}
-              <div className="space-y-2 pt-2">
+              <div className="space-y-2 pt-1">
                 {/* Voice Reminder Toggle */}
                 <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/60 border border-slate-700/60">
                   <div className="flex items-center gap-2.5">
@@ -176,7 +466,7 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                     <div>
                       <p className="text-xs font-bold text-white">Voice Speech Alert</p>
                       <p className="text-[11px] text-slate-400">
-                        Speaks aloud: "{settings.customVoicePhrase}"
+                        Speaks: "{settings.customVoicePhrase}"
                       </p>
                     </div>
                   </div>
@@ -191,7 +481,7 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                 {/* Loud University Bell Chime */}
                 <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/60 border border-slate-700/60">
                   <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-blue-500/15 text-blue-400">
+                    <div className="p-2 rounded-xl bg-white/10 text-white">
                       <Bell className="w-4 h-4" />
                     </div>
                     <div>
@@ -205,7 +495,7 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                     type="checkbox"
                     checked={settings.loudChimeEnabled}
                     onChange={(e) => updateSettings({ loudChimeEnabled: e.target.checked })}
-                    className="w-5 h-5 text-blue-600 rounded bg-slate-700 border-slate-600 focus:ring-blue-500"
+                    className="w-5 h-5 text-emerald-600 rounded bg-slate-700 border-slate-600 focus:ring-emerald-500"
                   />
                 </div>
 
@@ -228,34 +518,6 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                     onChange={(e) => updateSettings({ vibrationEnabled: e.target.checked })}
                     className="w-5 h-5 text-purple-600 rounded bg-slate-700 border-slate-600 focus:ring-purple-500"
                   />
-                </div>
-
-                {/* System Notifications Permission */}
-                <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-800/60 border border-slate-700/60">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400">
-                      <Bell className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-white">System Notifications</p>
-                      <p className="text-[11px] text-slate-400">
-                        Status: <strong className="text-amber-300">{notificationPermission}</strong>
-                      </p>
-                    </div>
-                  </div>
-                  {notificationPermission !== 'granted' ? (
-                    <button
-                      type="button"
-                      onClick={handleRequestNotification}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-500 hover:bg-amber-400 text-slate-950 transition"
-                    >
-                      Allow
-                    </button>
-                  ) : (
-                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1">
-                      <Check className="w-4 h-4" /> Active
-                    </span>
-                  )}
                 </div>
 
                 {/* Screen Keep Awake (Wake Lock) */}
@@ -285,38 +547,6 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                 </div>
               </div>
 
-              {/* Sound & Voice Test Bar */}
-              <div className="pt-2">
-                <p className="text-xs font-semibold text-slate-300 mb-2">Instant Audio Test</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => playLoudAlarmSound(0.9)}
-                    className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-blue-300 border border-blue-500/30 flex items-center justify-center gap-2 transition active:scale-95"
-                  >
-                    <Volume2 className="w-4 h-4" />
-                    Test Chime
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      speakVoiceAlert(
-                        'Intro Mining',
-                        'CCG3',
-                        '7:00 AM',
-                        settings.studentName,
-                        settings.customVoicePhrase
-                      )
-                    }
-                    className="py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-emerald-300 border border-emerald-500/30 flex items-center justify-center gap-2 transition active:scale-95"
-                  >
-                    <Volume2 className="w-4 h-4" />
-                    Test Voice
-                  </button>
-                </div>
-              </div>
-
               {/* Backup & Reset */}
               <div className="pt-4 border-t border-slate-800 space-y-3">
                 <p className="text-xs font-semibold text-slate-300">Data Management & Backup</p>
@@ -326,7 +556,7 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                     onClick={exportScheduleJson}
                     className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 flex items-center justify-center gap-2 transition"
                   >
-                    <Download className="w-4 h-4 text-sky-400" />
+                    <Download className="w-4 h-4 text-emerald-400" />
                     Export Backup
                   </button>
 
@@ -480,7 +710,7 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                 </div>
               </div>
 
-              {/* Option 3: Capacitor / Android Studio */}
+              {/* Option 4: Capacitor / Android Studio */}
               <div className="p-4 rounded-2xl bg-slate-800/60 border border-slate-700/60 space-y-2">
                 <div className="flex items-center gap-2">
                   <Terminal className="w-4 h-4 text-amber-400" />

@@ -3,10 +3,12 @@ import { ScheduleItem, UserSettings } from '../types/schedule';
 export const DEFAULT_SETTINGS: UserSettings = {
   studentName: 'Charlie Milan',
   voiceAlertEnabled: true,
+  voiceGender: 'female',
   loudChimeEnabled: true,
   vibrationEnabled: true,
   wakeLockEnabled: false,
   notificationsEnabled: true,
+  advanceReminderMinutes: [10, 5],
   customVoicePhrase: 'Charlie Milan, you have to do this',
   themeMode: 'dark',
   speechRate: 0.95,
@@ -120,6 +122,18 @@ export const DEFAULT_SCHEDULE_ITEMS: ScheduleItem[] = [
   // --- WEDNESDAY CLASSES ---
   {
     id: 'wed-1',
+    title: 'Crystallography and Mineralogy',
+    venue: 'GEO LAB only',
+    category: 'class',
+    day: 'Wednesday',
+    startTime: '08:00',
+    endTime: '10:00',
+    reminderEnabled: true,
+    advanceMinutes: [30, 10, 5],
+    notes: 'Crystal systems, optical axes, hand specimen and thin section laboratory.',
+  },
+  {
+    id: 'wed-2',
     title: 'S.Geology',
     venue: 'GEO LAB only',
     category: 'class',
@@ -127,6 +141,7 @@ export const DEFAULT_SCHEDULE_ITEMS: ScheduleItem[] = [
     startTime: '13:30',
     endTime: '15:30',
     reminderEnabled: true,
+    advanceMinutes: [10, 5],
     notes: 'Structural Geology practical session in GEO LAB only. Bring hand lens & lab manual.',
   },
 
@@ -177,14 +192,15 @@ export const DEFAULT_SCHEDULE_ITEMS: ScheduleItem[] = [
   },
   {
     id: 'thu-5',
-    title: 'Paleo',
-    venue: 'LH1',
+    title: 'Paleontology (Paleo)',
+    venue: 'CCJ3',
     category: 'class',
     day: 'Thursday',
     startTime: '17:30',
     endTime: '18:30',
     reminderEnabled: true,
-    notes: 'Paleontology lecture at LH1.',
+    advanceMinutes: [10, 5],
+    notes: 'Paleontology lecture at CCJ3 / LH1.',
   },
 
   // --- FRIDAY CLASSES ---

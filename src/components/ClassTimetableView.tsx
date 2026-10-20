@@ -203,6 +203,19 @@ export const ClassTimetableView: React.FC<ClassTimetableViewProps> = ({
                           {lecture.venue}
                         </span>
                       )}
+
+                      {lecture.reminderEnabled && (
+                        <span className="text-[10px] font-semibold text-emerald-300 bg-emerald-950/40 px-1.5 py-0.2 rounded border border-emerald-800/60 flex items-center gap-1">
+                          <Bell className="w-2.5 h-2.5 text-emerald-400" />
+                          {(lecture.advanceMinutes && lecture.advanceMinutes.length > 0
+                            ? lecture.advanceMinutes
+                            : [10, 5]
+                          )
+                            .map((m) => `${m}m`)
+                            .join(', ')}{' '}
+                          + start
+                        </span>
+                      )}
                     </div>
 
                     {/* Big Bold Class Title */}
