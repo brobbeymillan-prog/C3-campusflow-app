@@ -17,6 +17,7 @@ import {
   Monitor,
   CheckCircle2,
   Sliders,
+  RefreshCw,
 } from 'lucide-react';
 import { useSchedule } from '../context/ScheduleContext';
 import {
@@ -26,6 +27,7 @@ import {
   previewVoiceAlert,
   getCategorizedVoices,
 } from '../utils/audioAlert';
+import { forceCheckForUpdates } from '../utils/pwaUpdater';
 
 interface SettingsAndApkModalProps {
   isOpen: boolean;
@@ -58,11 +60,27 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
   const [activeTab, setActiveTab] = useState<'settings' | 'apk'>(initialTab);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [testCountdown, setTestCountdown] = useState<number | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<string>(
     typeof Notification !== 'undefined' ? Notification.permission : 'default'
   );
 
   const categorizedVoices = getCategorizedVoices();
+
+  const handleTriggerUpdate = async () => {
+    setIsUpdating(true);
+    setUpdateMsg('Fetching latest updates and reloading...');
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+      await forceCheckForUpdates();
+    } catch {
+      window.location.reload();
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -600,6 +618,66 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
           ) : (
             /* APK & PWA Tab */
             <div className="space-y-4">
+              {/* How Updates & Changes Show in Your Installed App */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-950/60 to-slate-900 border border-indigo-500/40 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-indigo-400 animate-ping" />
+                    <h4 className="text-sm font-bold text-indigo-200">
+                      Already Installed? How Changes Show Up
+                    </h4>
+                  </div>
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    Auto-Sync
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  When this app is installed on your computer or phone, it stores all files locally so it works <strong>100% offline</strong>.
+                  Whenever you or we make changes to the app code or timetable:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-white">
+                      <Monitor className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>On Computer (Desktop App)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-normal">
+                      Press <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-indigo-300 font-mono text-[10px]">Ctrl + Shift + R</kbd> (or <kbd className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-indigo-300 font-mono text-[10px]">Cmd + Shift + R</kbd> on Mac), or close and reopen the app window while connected to WiFi.
+                    </p>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-white">
+                      <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>On Phone (Android / iPhone)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-normal">
+                      Swipe the app away from your phone’s recent apps screen to close it completely, then reopen it while online. Or tap the button below.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Instant Force Refresh Button */}
+                <div className="pt-1 flex flex-col sm:flex-row items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleTriggerUpdate}
+                    disabled={isUpdating}
+                    className="w-full sm:w-auto flex-1 py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/30 transition cursor-pointer"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
+                    {isUpdating ? 'Checking & Updating App...' : '⚡ Sync & Pull Latest Update Now'}
+                  </button>
+                  {updateMsg && (
+                    <span className="text-xs font-semibold text-indigo-300 animate-pulse">
+                      {updateMsg}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               {/* Troubleshooting Notice for Android Users */}
               <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-500/40 space-y-2">
                 <div className="flex items-center gap-2">

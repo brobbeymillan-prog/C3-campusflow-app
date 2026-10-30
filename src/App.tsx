@@ -21,6 +21,7 @@ import { EditItemModal } from './components/EditItemModal';
 import { ActiveAlarmModal } from './components/ActiveAlarmModal';
 import { SettingsAndApkModal } from './components/SettingsAndApkModal';
 import { ShareModal } from './components/ShareModal';
+import { AppUpdateBanner } from './components/AppUpdateBanner';
 import { ScheduleItem, DayOfWeek, Category } from './types/schedule';
 import { getCurrentDayOfWeek } from './utils/timeUtils';
 
@@ -83,6 +84,9 @@ function MainApp() {
         onOpenApkGuide={handleOpenApkGuide}
         onOpenShare={() => setIsShareOpen(true)}
       />
+
+      {/* PWA Update & Installed App Sync Banner */}
+      <AppUpdateBanner />
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-4xl w-full mx-auto p-3.5 sm:p-6 pb-24">
