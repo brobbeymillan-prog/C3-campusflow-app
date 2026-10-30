@@ -30,6 +30,11 @@ import {
   flashWindowNotification,
   stopWindowFlash,
 } from '../utils/audioAlert';
+import {
+  scheduleAllBackgroundNotifications,
+  scheduleTestClosedAppNotification,
+  downloadPhoneCalendarFile,
+} from '../utils/backgroundScheduler';
 
 interface ScheduleContextType {
   items: ScheduleItem[];
@@ -37,6 +42,7 @@ interface ScheduleContextType {
   currentTime: Date;
   activeAlarm: ActiveAlarm | null;
   wakeLockActive: boolean;
+  backgroundStatus: { scheduledCount: number; timestampTriggerSupported: boolean };
   updateSettings: (newSettings: Partial<UserSettings>) => void;
   setVoiceGender: (gender: 'male' | 'female') => void;
   setGlobalAdvanceReminderMinutes: (minutes: number[]) => void;
@@ -49,6 +55,8 @@ interface ScheduleContextType {
   snoozeAlarm: (minutes?: number) => void;
   testTriggerAlarm: (customItem?: ScheduleItem, minutesBefore?: number) => void;
   testBackgroundAlert: (delaySeconds?: number, customItem?: ScheduleItem) => void;
+  scheduleTestClosedAppAlert: (delaySeconds?: number) => Promise<{ success: boolean; method: string }>;
+  downloadCalendarAlarms: () => void;
   exportScheduleJson: () => void;
   importScheduleJson: (jsonString: string) => boolean;
   toggleWakeLock: () => Promise<void>;
@@ -92,18 +100,26 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
   const [activeAlarm, setActiveAlarm] = useState<ActiveAlarm | null>(null);
   const [wakeLockActive, setWakeLockActive] = useState<boolean>(false);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const [backgroundStatus, setBackgroundStatus] = useState<{ scheduledCount: number; timestampTriggerSupported: boolean }>({
+    scheduledCount: 0,
+    timestampTriggerSupported: false,
+  });
 
   // Track triggered keys to prevent repeated alerts within the same minute
   const lastTriggeredKeysRef = useRef<Set<string>>(new Set());
 
-  // Save items to localStorage whenever they change
+  // Save items to localStorage whenever they change & auto-sync to Service Worker
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY_ITEMS, JSON.stringify(items));
     } catch (e) {
       console.error('Failed to save schedule to localStorage:', e);
     }
-  }, [items]);
+    // Schedule OS-level background notifications that fire even if app is closed
+    scheduleAllBackgroundNotifications(items, settings).then((res) => {
+      setBackgroundStatus(res);
+    });
+  }, [items, settings]);
 
   // Save settings to localStorage
   useEffect(() => {
@@ -320,6 +336,37 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [items, triggerAlarmForItem]);
 
+  // When app is launched directly from a closed notification via deep link
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('from_notification') === '1') {
+      const taskTitle = urlParams.get('title') || 'Paleontology';
+      const venue = urlParams.get('venue') || 'CCJ3';
+      const mins = parseInt(urlParams.get('mins') || '0', 10);
+
+      const matchingItem = items.find((i) => i.title === taskTitle) || {
+        id: 'closed-app-notif',
+        title: taskTitle,
+        venue,
+        startTime: '6:00',
+        endTime: '8:00',
+        category: 'class' as const,
+        day: 'Monday' as const,
+        reminderEnabled: true,
+        completedDates: [],
+      };
+
+      // Clean query params so refresh doesn't re-trigger
+      window.history.replaceState({}, document.title, window.location.pathname);
+
+      // Trigger loud chime and voice alert after small mount delay
+      setTimeout(() => {
+        triggerAlarmForItem(matchingItem, false, mins);
+      }, 700);
+    }
+  }, [items, triggerAlarmForItem]);
+
   // Test trigger function for user verification
   const testTriggerAlarm = useCallback(
     (customItem?: ScheduleItem, minutesBefore = 0) => {
@@ -367,6 +414,19 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [triggerAlarmForItem]
   );
+
+  // Schedule a real closed-app alert: user can close the app or lock phone, and it fires
+  const scheduleTestClosedAppAlert = useCallback(
+    async (delaySeconds = 10) => {
+      return scheduleTestClosedAppNotification(delaySeconds, settings.studentName);
+    },
+    [settings.studentName]
+  );
+
+  // Download complete phone calendar .ics with built-in 10m & 5m loud ringing alarms
+  const downloadCalendarAlarms = useCallback(() => {
+    downloadPhoneCalendarFile(items, settings.studentName);
+  }, [items, settings.studentName]);
 
   // Check schedules every second for trigger matches (both exact start and advance reminders)
   useEffect(() => {
@@ -504,6 +564,7 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
         currentTime,
         activeAlarm,
         wakeLockActive,
+        backgroundStatus,
         updateSettings,
         setVoiceGender,
         setGlobalAdvanceReminderMinutes,
@@ -516,6 +577,8 @@ export const ScheduleProvider: React.FC<{ children: React.ReactNode }> = ({
         snoozeAlarm,
         testTriggerAlarm,
         testBackgroundAlert,
+        scheduleTestClosedAppAlert,
+        downloadCalendarAlarms,
         exportScheduleJson,
         importScheduleJson,
         toggleWakeLock,

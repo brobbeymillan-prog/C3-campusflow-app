@@ -18,6 +18,9 @@ import {
   CheckCircle2,
   Sliders,
   RefreshCw,
+  Calendar,
+  Clock,
+  ShieldAlert,
 } from 'lucide-react';
 import { useSchedule } from '../context/ScheduleContext';
 import {
@@ -53,6 +56,9 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
     importScheduleJson,
     testTriggerAlarm,
     testBackgroundAlert,
+    scheduleTestClosedAppAlert,
+    downloadCalendarAlarms,
+    backgroundStatus,
     wakeLockActive,
     toggleWakeLock,
   } = useSchedule();
@@ -60,6 +66,8 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
   const [activeTab, setActiveTab] = useState<'settings' | 'apk'>(initialTab);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [testCountdown, setTestCountdown] = useState<number | null>(null);
+  const [closedTestCountdown, setClosedTestCountdown] = useState<number | null>(null);
+  const [closedTestStatus, setClosedTestStatus] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<string>(
@@ -111,6 +119,32 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
       setTestCountdown((prev) => {
         if (prev === null || prev <= 1) {
           clearInterval(interval);
+          return null;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleTestClosedApp = async () => {
+    setClosedTestCountdown(10);
+    setClosedTestStatus('Scheduling alert for 10s from now. CLOSE or swipe away the app window now!');
+    const res = await scheduleTestClosedAppAlert(10);
+    if (!res.success) {
+      if (res.method === 'permission_denied') {
+        setClosedTestStatus('⚠️ Notification permission required. Click "Allow Notifications" below.');
+      } else {
+        setClosedTestStatus('⚠️ Unable to schedule. Please allow notification permissions.');
+      }
+      setClosedTestCountdown(null);
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setClosedTestCountdown((prev) => {
+        if (prev === null || prev <= 1) {
+          clearInterval(interval);
+          setClosedTestStatus('🔔 Alert fired! If app was closed, notification should pop up on your lock screen/tray.');
           return null;
         }
         return prev - 1;
@@ -428,48 +462,107 @@ export const SettingsAndApkModal: React.FC<SettingsAndApkModalProps> = ({
                 </div>
               </div>
 
-              {/* Outside-App & Background Notification Guide & Test */}
-              <div className="p-4 rounded-2xl bg-slate-950 border border-emerald-500/30 space-y-3">
-                <div className="flex items-center gap-2">
-                  <Monitor className="w-4 h-4 text-emerald-400" />
-                  <h4 className="text-xs font-bold text-white uppercase tracking-wider">
-                    How Background Reminders Work Outside The App
-                  </h4>
+              {/* Closed-App & Outside-App Notification Engine */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/60 border border-emerald-500/40 space-y-3.5 shadow-xl">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+                      <Bell className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-white">
+                        Closed-App & Background Notification Engine
+                      </h4>
+                      <p className="text-[11px] text-emerald-400 font-semibold">
+                        Alerts fire even when Campus Flow has NOT been opened!
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      className={`text-[10px] uppercase tracking-wider font-extrabold px-2.5 py-0.5 rounded-full border ${
+                        notificationPermission === 'granted'
+                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                      }`}
+                    >
+                      {notificationPermission === 'granted' ? '✓ Alerts Allowed' : '⚠️ Permission Needed'}
+                    </span>
+                    {backgroundStatus.scheduledCount > 0 && (
+                      <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                        {backgroundStatus.scheduledCount} OS Alarms
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <p className="text-xs text-slate-300 leading-relaxed">
-                  On computers & laptops, keep Campus Flow minimized in your taskbar. Our isolated background Web Worker continuously monitors your schedule. When class time arrives, it triggers:
-                </p>
+                <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-xs text-slate-300 space-y-2 leading-relaxed">
+                  <p>
+                    <strong>How it works when the app has NOT been opened:</strong>
+                  </p>
+                  <ul className="space-y-1.5 list-disc list-inside text-slate-300 text-[11px]">
+                    <li>
+                      <strong className="text-white">Pre-Scheduled Alarms:</strong> Your classes (e.g. Paleontology at 6:00 AM, 10m before at 5:50 AM, 5m before at 5:55 AM) are pre-registered into your phone/PC operating system queue.
+                    </li>
+                    <li>
+                      <strong className="text-white">Ringing & Lockscreen Pop-up:</strong> When the time arrives, the system buzzes, vibrates, and shows the notification even if the phone was locked or app swiped away.
+                    </li>
+                    <li>
+                      <strong className="text-white">1-Tap Voice Spoken Out Loud:</strong> Tapping the notification opens Campus Flow, immediately starts the university chime alarm, and announces: <em>"Hey Charlie Milan, it's 6:00 AM — you have Paleontology at CCJ3 now!"</em>
+                    </li>
+                  </ul>
+                </div>
 
-                <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside">
-                  <li>Desktop system banner notification with course & lecture hall</li>
-                  <li>Flashing window title in your taskbar</li>
-                  <li>Loud university chime alarm & voice prompt</li>
-                </ul>
-
-                {/* Test Outside App Button */}
-                <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                {/* Interactive Test & Calendar Action Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {/* Test Closed App Alert Button */}
                   <button
                     type="button"
-                    onClick={handleStartMinimizationTest}
-                    disabled={testCountdown !== null}
-                    className="py-2.5 px-4 rounded-xl bg-white hover:bg-slate-200 text-slate-950 text-xs font-black shadow-md transition active:scale-95 flex items-center justify-center gap-2"
+                    onClick={handleTestClosedApp}
+                    disabled={closedTestCountdown !== null}
+                    className="py-2.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white text-xs font-black shadow-md transition flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    <Monitor className="w-4 h-4 text-emerald-600" />
-                    {testCountdown !== null
-                      ? `Minimize window now! Testing in ${testCountdown}s`
-                      : 'Test Outside-App Alert (Minimizes in 5s)'}
+                    <Clock className={`w-4 h-4 ${closedTestCountdown !== null ? 'animate-spin' : ''}`} />
+                    {closedTestCountdown !== null
+                      ? `CLOSE APP NOW! Fires in ${closedTestCountdown}s`
+                      : '🧪 Test Closed-App Alert (10s)'}
                   </button>
 
-                  {notificationPermission !== 'granted' && (
-                    <button
-                      type="button"
-                      onClick={handleRequestNotification}
-                      className="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold transition"
-                    >
-                      Allow Desktop Notifications
-                    </button>
-                  )}
+                  {/* Sync to Phone Calendar (.ics with alarms) */}
+                  <button
+                    type="button"
+                    onClick={downloadCalendarAlarms}
+                    className="py-2.5 px-3 rounded-xl bg-white hover:bg-slate-200 active:scale-95 text-slate-950 text-xs font-black shadow-md transition flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Calendar className="w-4 h-4 text-indigo-600" />
+                    <span>📅 Sync Timetable Alarms (.ics)</span>
+                  </button>
+                </div>
+
+                {/* Status or permission button */}
+                {closedTestStatus && (
+                  <p className="text-xs font-bold text-center text-amber-300 bg-amber-950/40 p-2.5 rounded-xl border border-amber-800 animate-pulse">
+                    {closedTestStatus}
+                  </p>
+                )}
+
+                {notificationPermission !== 'granted' && (
+                  <button
+                    type="button"
+                    onClick={handleRequestNotification}
+                    className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20"
+                  >
+                    <ShieldAlert className="w-4 h-4" />
+                    <span>Click Here: Allow Device Notifications So Alarms Can Ring</span>
+                  </button>
+                )}
+
+                <div className="p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-[11px] text-slate-400 flex items-start gap-2">
+                  <span className="text-base">💡</span>
+                  <div>
+                    <strong className="text-slate-300">Android Phone Tip:</strong> For guaranteed wakeups, go to phone <strong>Settings → Apps → Campus Flow → Battery → Unrestricted</strong> so Android OS doesn’t pause your background alarms to save power.
+                  </div>
                 </div>
               </div>
 
